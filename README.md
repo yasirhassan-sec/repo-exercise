@@ -15,6 +15,24 @@ This repository contains the **public landing page** and the **secure sign-in** 
 
 Every page is available in **English and Urdu** (right-to-left, Noto Nastaliq Urdu). The language button is in the top bar.
 
+## Screenshots
+
+| Landing page (English) | Landing page (Urdu) |
+| --- | --- |
+| ![Landing page in English](docs/screenshots/01-landing-english.png) | ![Landing page in Urdu](docs/screenshots/02-landing-urdu.png) |
+
+| Sign in (English) | Sign in (Urdu) |
+| --- | --- |
+| ![Sign-in page in English](docs/screenshots/03-login-english.png) | ![Sign-in page in Urdu](docs/screenshots/04-login-urdu.png) |
+
+| One-time code step | After sign-in |
+| --- | --- |
+| ![One-time code step](docs/screenshots/05-login-step2-code.png) | ![Dashboard after sign-in](docs/screenshots/06-dashboard-after-sign-in.png) |
+
+| Mobile: landing | Mobile: sign in | Mobile: sign in (Urdu) |
+| --- | --- | --- |
+| ![Landing page on mobile](docs/screenshots/07-landing-mobile.png) | ![Sign-in on mobile](docs/screenshots/08-login-mobile.png) | ![Sign-in on mobile in Urdu](docs/screenshots/09-login-mobile-urdu.png) |
+
 ## Security controls
 
 | Control | Implementation |
