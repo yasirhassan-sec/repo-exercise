@@ -1,21 +1,16 @@
 import { NextResponse } from "next/server";
 import { startLogin } from "@/lib/auth";
+import { clientIp, sameOrigin } from "@/lib/request";
 
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => null)) as
-    | { cnic?: unknown; password?: unknown; role?: unknown }
-    | null;
-  const result = startLogin(
-    typeof body?.cnic === "string" ? body.cnic.trim() : "",
-    typeof body?.password === "string" ? body.password : "",
-    typeof body?.role === "string" ? body.role : "",
-  );
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.status });
-  }
+  if (!sameOrigin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const result = await startLogin(str(body?.cnic).trim(), str(body?.password), str(body?.role), clientIp(req));
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({
     challengeId: result.challengeId,
     maskedPhone: result.maskedPhone,
-    devOtp: result.devOtp,
+    ...(result.demoOtp ? { demoOtp: result.demoOtp } : {}),
   });
 }

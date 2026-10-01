@@ -1,25 +1,26 @@
 import type { Metadata } from "next";
+import "@fontsource/sora/latin-600.css";
+import "@fontsource/sora/latin-700.css";
+import "@fontsource/ibm-plex-sans/latin-400.css";
+import "@fontsource/ibm-plex-sans/latin-500.css";
+import "@fontsource/ibm-plex-sans/latin-600.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
+import "@fontsource/noto-nastaliq-urdu/arabic-400.css";
+import "@fontsource/noto-nastaliq-urdu/arabic-700.css";
 import "./globals.css";
+import { getLang } from "@/lib/i18n";
 
 export const metadata: Metadata = {
-  title: "Milkiyat — Secure land records",
-  description:
-    "A secure and privacy-preserving blockchain framework for land record management.",
+  title: "Milkiyat — Land Record Management System",
+  description: "Secure, privacy-preserving land record management on a tamper-evident blockchain ledger.",
+  robots: { index: true, follow: true },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const lang = await getLang();
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
-        />
-      </head>
-      <body>{children}</body>
+    <html lang={lang === "ur" ? "ur" : "en"} dir={lang === "ur" ? "rtl" : "ltr"}>
+      <body className={lang === "ur" ? "lang-ur" : "lang-en"}>{children}</body>
     </html>
   );
 }

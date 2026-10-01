@@ -1,71 +1,76 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { NavBar, SiteFooter } from "@/components/SiteHeader";
+import { Brand, SiteFooter, SkipLink, UtilityBar } from "@/components/Chrome";
 import { Check } from "@/components/Icons";
-import { ROLE_LABELS, SESSION_COOKIE, recentAudit, verifySession } from "@/lib/auth";
+import { recentAudit } from "@/lib/audit";
+import { sessionCookieName, verifySession } from "@/lib/auth";
+import { dict, getLang } from "@/lib/i18n";
 
 export const metadata: Metadata = { title: "Dashboard — Milkiyat" };
 
-const permissions: Record<string, string[]> = {
-  citizen: ["View your own parcels and ownership history", "Request an ownership transfer", "Download verified records"],
-  surveyor: ["Verify parcel boundaries", "Sign survey data on pending transactions"],
-  registrar: ["Register new parcels", "Approve and sign ownership transfers", "Read decrypted owner details (logged)"],
-  administrator: ["Manage users and roles", "Configure the system", "Review the full audit log"],
-};
-
 export default async function DashboardPage() {
   const jar = await cookies();
-  const session = verifySession(jar.get(SESSION_COOKIE)?.value);
+  const session = verifySession(jar.get(sessionCookieName())?.value);
   if (!session) redirect("/login");
 
+  const lang = await getLang();
+  const t = dict(lang);
+  const locale = lang === "ur" ? "ur-PK" : "en-PK";
   const log = recentAudit(session.sub);
 
   return (
     <>
-      <header className="site-header dark">
-        <div className="container"><NavBar /></div>
-      </header>
-      <main className="container dash">
-        <div className="dash-head">
-          <div>
-            <p className="eyebrow">{ROLE_LABELS[session.role]}</p>
-            <h1>Welcome, {session.name}</h1>
-          </div>
+      <SkipLink t={t} />
+      <UtilityBar t={t} lang={lang} next="/dashboard" />
+      <header className="site-header">
+        <div className="container nav">
+          <Brand t={t} lang={lang} />
           <form action="/api/auth/logout" method="post">
-            <button className="btn btn-ghost" type="submit">Sign out</button>
+            <button className="btn btn-outline-light" type="submit">{t.dash.signOut}</button>
           </form>
         </div>
+      </header>
+      <main id="main" tabIndex={-1} className="container dash">
+        <div>
+          <p className="eyebrow">{t.roleNames[session.role]}</p>
+          <h1>{t.dash.welcome}, {session.name}</h1>
+        </div>
 
-        <div className="grid">
-          <section className="card" aria-labelledby="session">
-            <h3 id="session">Your session</h3>
-            <span className="pill pill-ok" style={{ alignSelf: "flex-start" }}><Check size={14} strokeWidth={2.5} />MFA verified</span>
-            <p>CNIC <span className="mono">{session.sub}</span></p>
-            <p>Expires at {new Date(session.exp * 1000).toLocaleTimeString("en-PK")}</p>
+        <div className="grid grid-2">
+          <section className="card" aria-labelledby="session-h">
+            <h2 id="session-h">{t.dash.session}</h2>
+            <span className="pill pill-ok"><Check size={14} strokeWidth={2.5} />{t.dash.mfa}</span>
+            <p><bdi className="mono">{session.sub}</bdi></p>
+            <p>{t.dash.expires}: {new Date(session.exp * 1000).toLocaleTimeString(locale)}</p>
           </section>
-          <section className="card" aria-labelledby="perm">
-            <h3 id="perm">What your role can do</h3>
-            <ul style={{ margin: 0, paddingLeft: 20, color: "var(--muted)" }}>
-              {permissions[session.role].map((p) => <li key={p}>{p}</li>)}
+          <section className="card" aria-labelledby="perm-h">
+            <h2 id="perm-h">{t.dash.permissions}</h2>
+            <ul className="checklist">
+              {t.dash.perms[session.role].map((p) => (
+                <li key={p}><Check size={18} strokeWidth={2.5} /><span>{p}</span></li>
+              ))}
             </ul>
           </section>
         </div>
 
-        <section className="card" aria-labelledby="audit">
-          <h3 id="audit">Recent activity on your account</h3>
-          <ul className="audit">
-            {log.map((e) => (
-              <li key={`${e.at}-${e.event}`}>
-                <time dateTime={e.at}>{new Date(e.at).toLocaleString("en-PK")}</time>
-                <span>{e.event}</span>
-                {e.detail && <span style={{ color: "var(--muted)" }}>{e.detail}</span>}
-              </li>
-            ))}
-          </ul>
+        <section className="card" aria-labelledby="audit-h">
+          <h2 id="audit-h">{t.dash.activity}</h2>
+          <p className="muted">{t.dash.activityNote}</p>
+          <table className="audit">
+            <tbody>
+              {log.map((e) => (
+                <tr key={e.seq}>
+                  <td><time dateTime={e.at}>{new Date(e.at).toLocaleString(locale)}</time></td>
+                  <td>{t.dash.events[e.event] ?? e.event}</td>
+                  <td className="mono muted" dir="ltr">#{e.seq} · {e.hash.slice(0, 12)}…</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       </main>
-      <SiteFooter />
+      <SiteFooter t={t} lang={lang} />
     </>
   );
 }

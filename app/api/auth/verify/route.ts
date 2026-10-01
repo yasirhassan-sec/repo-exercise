@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, completeLogin, sessionCookieOptions } from "@/lib/auth";
+import { completeLogin, sessionCookieName, sessionCookieOptions } from "@/lib/auth";
+import { clientIp, sameOrigin } from "@/lib/request";
 
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => null)) as
-    | { challengeId?: unknown; otp?: unknown }
-    | null;
-  const result = completeLogin(
-    typeof body?.challengeId === "string" ? body.challengeId : "",
-    typeof body?.otp === "string" ? body.otp.replace(/\s/g, "") : "",
-  );
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.status });
-  }
-  const res = NextResponse.json({ role: result.session.role });
-  res.cookies.set(SESSION_COOKIE, result.token, sessionCookieOptions());
+  if (!sameOrigin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const result = completeLogin(str(body?.challengeId), str(body?.otp).replace(/\s/g, ""), clientIp(req));
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  const res = NextResponse.json({ ok: true });
+  res.cookies.set(sessionCookieName(), result.token, sessionCookieOptions());
   return res;
 }

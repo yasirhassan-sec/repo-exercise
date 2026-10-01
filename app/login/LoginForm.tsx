@@ -1,12 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { Dict } from "@/lib/i18n";
 
-type Props = { roles: { value: string; label: string }[]; initialRole?: string };
+type Props = {
+  t: Dict["login"];
+  roles: { value: string; label: string }[];
+  initialRole: string;
+};
 
-type Challenge = { challengeId: string; maskedPhone: string; devOtp?: string };
+type Challenge = { challengeId: string; maskedPhone: string; demoOtp?: string };
+type ErrorKey = keyof Dict["login"]["errors"];
 
 function formatCnic(raw: string): string {
   const d = raw.replace(/\D/g, "").slice(0, 13);
@@ -15,43 +20,51 @@ function formatCnic(raw: string): string {
   return `${d.slice(0, 5)}-${d.slice(5, 12)}-${d.slice(12)}`;
 }
 
-async function post<T>(url: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+async function post<T>(url: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: ErrorKey }> {
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      credentials: "same-origin",
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false, error: data.error ?? "Something went wrong. Try again." };
+    if (!res.ok) return { ok: false, error: (data.error as ErrorKey) ?? "unknown" };
     return { ok: true, data: data as T };
   } catch {
-    return { ok: false, error: "Can't reach the server. Check your connection." };
+    return { ok: false, error: "network" };
   }
 }
 
-export default function LoginForm({ roles, initialRole }: Props) {
+export default function LoginForm({ t, roles, initialRole }: Props) {
   const router = useRouter();
-  const [role, setRole] = useState(initialRole ?? roles[0]?.value ?? "citizen");
+  const [role, setRole] = useState(initialRole);
   const [cnic, setCnic] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [challenge, setChallenge] = useState<Challenge | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorKey | null>(null);
   const [busy, setBusy] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
+
+  const message = (e: ErrorKey) => t.errors[e] ?? t.errors.unknown;
 
   async function submitPassword(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!/^\d{5}-\d{7}-\d$/.test(cnic)) {
-      setError("Enter your CNIC as XXXXX-XXXXXXX-X.");
+    if (!/^\d{5}-\d{7}-\d$/.test(cnic) || !password) {
+      setError("invalid_input");
       return;
     }
     setBusy(true);
     const r = await post<Challenge>("/api/auth/login", { cnic, password, role });
     setBusy(false);
-    if (!r.ok) return setError(r.error);
     setPassword("");
+    if (!r.ok) return setError(r.error);
     setOtp("");
     setChallenge(r.data);
   }
@@ -61,103 +74,115 @@ export default function LoginForm({ roles, initialRole }: Props) {
     if (!challenge) return;
     setError(null);
     setBusy(true);
-    const r = await post<{ role: string }>("/api/auth/verify", { challengeId: challenge.challengeId, otp });
+    const r = await post<{ ok: true }>("/api/auth/verify", { challengeId: challenge.challengeId, otp });
     if (!r.ok) {
       setBusy(false);
       setError(r.error);
-      if (/again/i.test(r.error)) setChallenge(null);
+      if (r.error === "otp_expired" || r.error === "otp_too_many") setChallenge(null);
       return;
     }
     router.replace("/dashboard");
     router.refresh();
   }
 
-  function startOver() {
+  function restart() {
     setChallenge(null);
     setOtp("");
     setError(null);
   }
 
-  return (
-    <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <h2>{challenge ? "Enter your one-time code" : "Sign in"}</h2>
-        <div className="stepper" aria-label={`Step ${challenge ? 2 : 1} of 2`}>
-          <span className={challenge ? "" : "on"}>1 · Password</span>
-          <span className={challenge ? "on" : ""}>2 · One-time code</span>
-        </div>
-      </div>
+  const step = challenge ? 2 : 1;
 
-      {error && <div className="alert alert-error" role="alert">{error}</div>}
+  return (
+    <div className="login">
+      <h2>{challenge ? t.otpTitle : t.title}</h2>
+      <ol className="stepper">
+        <li className={step === 1 ? "on" : "done"} aria-current={step === 1 ? "step" : undefined}>1 · {t.step1}</li>
+        <li className={step === 2 ? "on" : ""} aria-current={step === 2 ? "step" : undefined}>2 · {t.step2}</li>
+      </ol>
+
+      <div aria-live="assertive">
+        {error && (
+          <div className="alert alert-error" role="alert" tabIndex={-1} ref={errorRef}>
+            {message(error)}
+          </div>
+        )}
+      </div>
 
       {!challenge ? (
         <form className="form" onSubmit={submitPassword} noValidate>
           <div className="form-field">
-            <label htmlFor="role">I am signing in as</label>
-            <select id="role" value={role} onChange={(e) => setRole(e.target.value)}>
-              {roles.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
+            <label htmlFor="role">{t.role}</label>
+            <select id="role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
+              {roles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
           <div className="form-field">
-            <label htmlFor="cnic">CNIC number</label>
+            <label htmlFor="cnic">{t.cnic}</label>
             <input
               id="cnic"
               name="username"
+              dir="ltr"
               inputMode="numeric"
               autoComplete="username"
-              placeholder="XXXXX-XXXXXXX-X"
+              placeholder="00000-0000000-0"
               className="mono"
+              aria-describedby="cnic-hint"
+              aria-invalid={error === "invalid_input" || error === "bad_credentials" || undefined}
               value={cnic}
               onChange={(e) => setCnic(formatCnic(e.target.value))}
               required
             />
+            <span id="cnic-hint" className="hint">{t.cnicHint} <bdi dir="ltr" className="mono">12345-1234567-1</bdi></span>
           </div>
           <div className="form-field">
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">{t.password}</label>
             <input
               id="password"
               type="password"
+              dir="ltr"
               autoComplete="current-password"
+              maxLength={256}
+              aria-invalid={error === "bad_credentials" || undefined}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
-          <button className="btn btn-green" type="submit" disabled={busy || !cnic || !password}>
-            {busy ? "Checking…" : "Continue"}
+          <button className="btn btn-green btn-block" type="submit" disabled={busy}>
+            {busy ? t.checking : t.continue}
           </button>
-          <Link href="/" style={{ fontSize: 14 }}>← Back to home</Link>
         </form>
       ) : (
         <form className="form" onSubmit={submitOtp} noValidate>
           <div className="alert alert-info" role="status">
-            We sent a 6-digit code to <strong>{challenge.maskedPhone}</strong>. It expires in 5 minutes.
-            {challenge.devOtp && (
-              <> Development code: <strong className="mono">{challenge.devOtp}</strong></>
+            {t.otpSent} <bdi className="mono">{challenge.maskedPhone}</bdi>. {t.otpExpiry}
+            {challenge.demoOtp && (
+              <span className="demo-code"> {t.demoCode}: <bdi className="mono">{challenge.demoOtp}</bdi></span>
             )}
           </div>
           <div className="form-field">
-            <label htmlFor="otp">One-time code</label>
+            <label htmlFor="otp">{t.otp}</label>
             <input
               id="otp"
+              dir="ltr"
               className="otp-input"
               inputMode="numeric"
               autoComplete="one-time-code"
               maxLength={6}
+              aria-invalid={error === "otp_wrong" || undefined}
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
               autoFocus
               required
             />
           </div>
-          <button className="btn btn-green" type="submit" disabled={busy || otp.length !== 6}>
-            {busy ? "Verifying…" : "Verify & sign in"}
+          <button className="btn btn-green btn-block" type="submit" disabled={busy || otp.length !== 6}>
+            {busy ? t.verifying : t.verify}
           </button>
-          <button type="button" className="link-btn" onClick={startOver}>Use a different account or resend code</button>
+          <button type="button" className="link-btn" onClick={restart}>{t.restart}</button>
         </form>
       )}
-    </>
+    </div>
   );
 }
